@@ -55,32 +55,7 @@ export default function Home() {
           </p>
 
           <div>
-            <div className="grid gap-4 transition delay-[80ms] duration-[400ms] ease-in-out hover:scale-102 p-1">
-              <button
-                onClick={() => handleNavigate("/calculo-pf")}
-                className={`w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 text-lg font-medium shadow-lg hover:shadow-xl scale-105 transform transition-all duration-[700ms] ease-out hover:duration-[250ms] delay-[700ms] 
-              ${
-                isVisible
-                  ? "opacity-100 translate-y-0"
-                  : "opacity-0 translate-y-4"
-              }`}
-              >
-                Imposto de Renda - Pessoa Física
-              </button>
-            </div>
-            <div className="grid gap-4 transition delay-[80ms] duration-[400ms] ease-in-out hover:scale-102 p-1">
-              <button
-                onClick={() => handleNavigate("/calculo-pj")}
-                className={`w-full bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 text-lg font-medium shadow-lg hover:shadow-xl scale-105 transform transition-all duration-[700ms] ease-out hover:duration-[250ms] delay-[900ms]
-              ${
-                isVisible
-                  ? "opacity-100 translate-y-0"
-                  : "opacity-0 translate-y-4"
-              }`}
-              >
-                Imposto de Renda - Pessoa Jurídica
-              </button>
-            </div>
+
 
             <div className="grid gap-4 transition delay-[80ms] duration-[400ms] ease-in-out hover:scale-102 p-1">
               <button

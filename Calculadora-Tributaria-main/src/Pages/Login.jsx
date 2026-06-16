@@ -197,7 +197,7 @@ export default function Login() {
           isVisible ? "opacity-100" : "opacity-0"
         }`}
       >
-        Desenvolvido por: <span className="font-semibold">Irmãos Metralha</span>
+        Desenvolvido por: <span className="font-semibold">Garotos de Programa</span>
       </h2>
     </div>
   );

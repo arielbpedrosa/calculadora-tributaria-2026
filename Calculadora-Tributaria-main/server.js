@@ -1,15 +1,22 @@
 import jwt from 'jsonwebtoken';
-import mysql from 'mysql2/promise';
+import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 import express from 'express';
 import cors from 'cors';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
-const SECRET_KEY = 'edead35592554922e00a96a11d756b962ea69d4c053ca12a26994ab5372781cf';
+const SECRET_KEY = process.env.SECRET_KEY || 'edead35592554922e00a96a11d756b962ea69d4c053ca12a26994ab5372781cf';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 // Middleware
 app.use(express.json());
@@ -20,61 +27,24 @@ app.use(
     })
 );
 
-// Configuração do pool
-const pool = mysql.createPool({
-    host: "localhost",
-    user: "root",
-    password: process.env.senha_db,
-    database: "usuario_db",
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
-
-// Inicia o BD
-async function inicializarBD() {
-    let conexao;
+// Inicia o servidor e verifica a conexão com o banco
+async function inicializarServidor() {
     try {
-        conexao = await pool.getConnection();
-        console.log("Conectado ao MySQL!");
+        await prisma.$connect();
+        console.log("Conectado ao PostgreSQL com sucesso via Prisma!");
 
-        const [dbInfo] = await conexao.execute("SELECT DATABASE() as current_db");
-        console.log(`Database atual: ${dbInfo[0].current_db}`);
-
-        await conexao.execute(`
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                nome VARCHAR(100) NOT NULL,
-                email VARCHAR(100) NOT NULL UNIQUE,
-                senha VARCHAR(255) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-        console.log("Tabela 'usuarios' verificada/criada.");
-
-        console.log("Banco de dados inicializado com sucesso!");
+        app.listen(PORT, () => {
+            console.log(`Servidor rodando na porta ${PORT}`);
+        });
 
     } catch (error) {
-        console.error("ERRO ao inicializar banco de dados:");
+        console.error("ERRO ao conectar ao banco de dados:");
         console.error("Mensagem:", error.message);
-        console.error("Código:", error.code);
-        if (error.sql) console.error("SQL:", error.sql);
-        if (error.sqlMessage) console.error("SQL Message:", error.sqlMessage);
         process.exit(1);
-    } finally {
-        if (conexao) conexao.release();
     }
 }
 
-// Inicia o servidor
-inicializarBD().then(() => {
-    app.listen(PORT, () => {
-        console.log(`Servidor rodando na porta ${PORT}`);
-    });
-}).catch((error) => {
-    console.error("Falha ao inicializar o banco de dados. Servidor não iniciado.");
-    process.exit(1);
-});
+inicializarServidor();
 
 // Configuração do email com .env 
 const transporter = nodemailer.createTransport({
@@ -117,7 +87,6 @@ app.post('/send-email', async (req, res) => {
 });
 
 app.post('/register', async (req, res) => {
-    let conexao;
     try {
         const { nome, email, senha } = req.body;
 
@@ -128,32 +97,33 @@ app.post('/register', async (req, res) => {
             return res.status(400).json({ message: "Todos os campos são obrigatórios." });
         }
 
-        // Conecta ao banco
-        conexao = await pool.getConnection();
-
         // Verifica se o email já existe
-        const [existingUsers] = await conexao.execute(
-            "SELECT id FROM usuarios WHERE email = ?",
-            [email]
-        );
+        const existingUser = await prisma.usuario.findUnique({
+            where: { email }
+        });
 
-        if (existingUsers.length > 0) {
+        if (existingUser) {
             return res.status(409).json({ message: "Email já registrado." });
         }
 
-        console.log("AVISO: Senha sendo armazenada em texto puro!");
+        // Criptografar a senha
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(senha, salt);
 
-        const [result] = await conexao.execute(
-            "INSERT INTO usuarios (nome, email, senha) VALUES (?, ?, ?)",
-            [nome, email, senha] 
-        );
+        const newUser = await prisma.usuario.create({
+            data: {
+                nome,
+                email,
+                senha: hashedPassword
+            }
+        });
 
-        console.log(`Usuário inserido com ID: ${result.insertId}`);
+        console.log(`Usuário inserido com ID: ${newUser.id}`);
 
         // Retornar sucesso
         return res.status(201).json({ 
             message: "Usuário registrado com sucesso!", 
-            userId: result.insertId 
+            userId: newUser.id 
         });
 
     } catch (error) {
@@ -163,13 +133,10 @@ app.post('/register', async (req, res) => {
             message: "Erro interno no servidor",
             error: error.message 
         });
-    } finally {
-        if (conexao) conexao.release();
     }
 });
 
 app.post('/login', async (req, res) => {
-    let conexao;
     try {
         const { email, senha } = req.body;
 
@@ -180,24 +147,22 @@ app.post('/login', async (req, res) => {
             return res.status(400).json({ message: "Email e senha são obrigatórios." });
         }
 
-        // Conecta ao banco
-        conexao = await pool.getConnection();
-
         // Busca usuário pelo email
-        const [usuarios] = await conexao.execute(
-            "SELECT * FROM usuarios WHERE email = ?",
-            [email]
-        );
+        const usuario = await prisma.usuario.findUnique({
+            where: { email }
+        });
 
-        if (usuarios.length === 0) {
+        if (!usuario) {
             console.log("Usuário não encontrado:", email);
             return res.status(401).json({ message: "Credenciais inválidas." });
         }
 
-        const usuario = usuarios[0];
         console.log(`Usuário encontrado: ${usuario.nome} (ID: ${usuario.id})`);
         
-        if (senha !== usuario.senha) {
+        // Verificar a senha
+        const isMatch = await bcrypt.compare(senha, usuario.senha);
+
+        if (!isMatch) {
             console.log("Senha incorreta para:", email);
             return res.status(401).json({ message: "Credenciais inválidas." });
         }
@@ -229,8 +194,6 @@ app.post('/login', async (req, res) => {
         console.error('ERRO no login:', error.message);
         
         return res.status(500).json({ message: "Erro interno do servidor." });
-    } finally {
-        if (conexao) conexao.release();
     }
 });
 
@@ -247,16 +210,77 @@ const authenticateToken = (req, res, next) => {
         if (err) {
             return res.status(403).json({ message: 'Token inválido.' });
         }
-        req.user = user;
+        req.user = user; // O req.user contém as informações descritas no jwt.sign ({id, nome, email})
         next();
     });
 };
 
-app.get('/debug/usuarios', authenticateToken, async (req, res) => {
-    let conexao;
+// ==========================================
+// Novas Rotas para "Dados Comparativos"
+// ==========================================
+
+// Salvar um novo resultado de comparação
+app.post('/comparacoes', authenticateToken, async (req, res) => {
     try {
-        conexao = await pool.getConnection();
-        const [usuarios] = await conexao.execute("SELECT id, nome, email, created_at FROM usuarios");
+        const { dadosEntrada, resultados } = req.body;
+        
+        if (!dadosEntrada || !resultados) {
+            return res.status(400).json({ message: "dadosEntrada e resultados são obrigatórios." });
+        }
+
+        const novaComparacao = await prisma.comparacao.create({
+            data: {
+                usuarioId: req.user.id,
+                dadosEntrada,
+                resultados
+            }
+        });
+
+        return res.status(201).json({
+            message: "Comparação salva com sucesso!",
+            comparacao: novaComparacao
+        });
+
+    } catch (error) {
+        console.error("ERRO ao salvar comparação:", error.message);
+        return res.status(500).json({ message: "Erro interno do servidor." });
+    }
+});
+
+// Listar todas as comparações do usuário logado
+app.get('/comparacoes', authenticateToken, async (req, res) => {
+    try {
+        const comparacoes = await prisma.comparacao.findMany({
+            where: {
+                usuarioId: req.user.id
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        return res.status(200).json({ comparacoes });
+        
+    } catch (error) {
+        console.error("ERRO ao listar comparações:", error.message);
+        return res.status(500).json({ message: "Erro interno do servidor." });
+    }
+});
+
+// ==========================================
+// Rotas de Debug
+// ==========================================
+
+app.get('/debug/usuarios', authenticateToken, async (req, res) => {
+    try {
+        const usuarios = await prisma.usuario.findMany({
+            select: {
+                id: true,
+                nome: true,
+                email: true,
+                createdAt: true
+            }
+        });
         
         return res.status(200).json({
             total: usuarios.length,
@@ -265,16 +289,12 @@ app.get('/debug/usuarios', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error("Erro no debug:", error);
         return res.status(500).json({ error: error.message });
-    } finally {
-        if (conexao) conexao.release();
     }
 });
 
 app.get('/debug/todos-usuarios', async (req, res) => {
-    let conexao;
     try {
-        conexao = await pool.getConnection();
-        const [usuarios] = await conexao.execute("SELECT id, nome, email, senha, created_at FROM usuarios");
+        const usuarios = await prisma.usuario.findMany();
         
         console.log("Usuários no banco:", usuarios);
         
@@ -285,11 +305,21 @@ app.get('/debug/todos-usuarios', async (req, res) => {
     } catch (error) {
         console.error("Erro no debug:", error);
         return res.status(500).json({ error: error.message });
-    } finally {
-        if (conexao) conexao.release();
     }
 });
 
 app.get("/protegido", authenticateToken, (req, res) => {
     res.status(200).json({ message: "Acesso concedido à rota protegida.", user: req.user });
-})
+});
+
+// Process event handlers for cleanup
+process.on('SIGINT', async () => {
+    console.log('Fechando conexão com o banco de dados...');
+    await prisma.$disconnect();
+    process.exit(0);
+});
+process.on('SIGTERM', async () => {
+    console.log('Fechando conexão com o banco de dados...');
+    await prisma.$disconnect();
+    process.exit(0);
+});

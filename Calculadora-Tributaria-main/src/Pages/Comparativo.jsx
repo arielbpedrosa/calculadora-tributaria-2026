@@ -146,12 +146,31 @@ export default function Comparativo() {
     const diferenca = Math.abs(pj.total - pf.imposto);
     const maisVantajoso = pj.total < pf.imposto ? "Pessoa Jurídica" : "Pessoa Física";
 
-    setResultado({
+    const resultadoCalculado = {
       pf,
       pj,
       maisVantajoso,
       diferenca
-    });
+    };
+
+    setResultado(resultadoCalculado);
+
+    // Salvar no backend se o usuário estiver logado
+    if (token) {
+      fetch("http://localhost:3000/comparacoes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          dadosEntrada: { renda: rendaNum, custos: custosNum, profissao },
+          resultados: resultadoCalculado
+        })
+      }).then(res => {
+        if (!res.ok) console.error("Falha ao salvar a comparação no banco de dados.");
+      }).catch(err => console.error("Erro na requisição:", err));
+    }
 
     setMostrarEmail(false);
     setMensagemEnvio("");

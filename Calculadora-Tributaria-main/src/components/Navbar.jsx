@@ -27,23 +27,7 @@ export default function Navbar() {
 
               <div className="h-6 w-px bg-gray-300" />
 
-              <button
-                onClick={() => navigate('/calculo-pf')}
-                className="px-3 py-2 rounded-md text-sm font-medium text-black hover:bg-sky-600 hover:scale-105 transition-all duration-[500ms] ease-in-out"
-              >
-                Calculo PF
-              </button>
 
-              <div className="h-6 w-px bg-gray-300" />
-
-              <button
-                onClick={() => navigate('/calculo-pj')}
-                className="px-3 py-2 rounded-md text-sm font-medium text-black hover:bg-sky-600 hover:scale-105 transition-all duration-[500ms] ease-in-out"
-              >
-                Calculo PJ
-              </button>
-
-              <div className="h-6 w-px bg-gray-300" />
 
               <button
                 onClick={() => navigate('/comparativo')}
