@@ -87,8 +87,6 @@ npm install
 npm run dev
 ```
 
-Acesse: [http://localhost:5173](http://localhost:5173)
-
 > ⚠️ Nesta branch (NP2), **não há backend**. O login e o cadastro são apenas visuais. Para a versão completa com autenticação real e banco de dados, veja a branch [`main`](../../tree/main).
 
 ---
