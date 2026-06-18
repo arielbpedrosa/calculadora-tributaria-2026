@@ -263,13 +263,6 @@ npm run dev
 # 5. (Opcional) Abrir a interface visual do banco de dados
 npx prisma studio
 ```
-
-| Serviço | URL |
-|---|---|
-| Frontend (React) | http://localhost:5173 |
-| Backend (API) | http://localhost:3000 |
-| Prisma Studio (DB) | http://localhost:5555 |
-
 ---
 
 ## 13. Conclusão
